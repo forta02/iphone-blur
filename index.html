@@ -1,134 +1,153 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kamera Mode Potret</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kamera Auto Blur dengan Kontrol F</title>
   <style>
     body {
       margin: 0;
+      overflow: hidden;
       background: #000;
-      color: white;
       display: flex;
       flex-direction: column;
-      align-items: center;
       justify-content: center;
+      align-items: center;
       height: 100vh;
-      font-family: 'Poppins', sans-serif;
-      overflow: hidden;
+      color: #fff;
+      font-family: "Poppins", sans-serif;
     }
-    video, canvas {
-      position: absolute;
-      width: 100%;
+
+    #outputCanvas {
+      width: 90vw;
       height: auto;
-      object-fit: cover;
-      border-radius: 16px;
+      border-radius: 14px;
+      box-shadow: 0 0 25px rgba(0, 0, 0, 0.8);
     }
+
     .controls {
-      position: fixed;
-      bottom: 20px;
-      background: rgba(0,0,0,0.6);
-      padding: 10px 20px;
-      border-radius: 12px;
+      margin-top: 15px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
     }
-    input[type=range] {
-      width: 160px;
+
+    input[type="range"] {
+      width: 200px;
       accent-color: #00bfff;
+      cursor: pointer;
     }
+
     #fValue {
       font-weight: bold;
-      font-size: 1rem;
+      font-size: 1.1rem;
       min-width: 50px;
+      text-align: center;
     }
+
+    #info {
+      margin-top: 8px;
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+
     #loading {
-      font-size: 1.2rem;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
       color: #00bfff;
+      font-size: 1.1rem;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.3; }
     }
   </style>
 </head>
 <body>
-  <div id="loading">⏳ Memuat model potret...</div>
-  <video id="video" autoplay playsinline></video>
-  <canvas id="canvas"></canvas>
+  <div id="loading">⏳ Memuat model AI...</div>
+  <canvas id="outputCanvas"></canvas>
 
   <div class="controls">
-    <label>Aperture (F):</label>
-    <input type="range" id="blurRange" min="1.4" max="8" step="0.1" value="2.0">
-    <span id="fValue">f/2.0</span>
+    <label for="blurRange">Aperture (F):</label>
+    <input type="range" id="blurRange" min="1.8" max="8" step="0.1" value="2.8">
+    <span id="fValue">f/2.8</span>
   </div>
 
+  <div id="info">🎥 Fokus otomatis pada objek utama (blur latar menyesuaikan)</div>
+
+  <!-- TensorFlow.js dan BodyPix -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/segmentation@0.1.3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0"></script>
 
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-    const blurRange = document.getElementById('blurRange');
-    const fValue = document.getElementById('fValue');
-    const loading = document.getElementById('loading');
+    const video = document.createElement("video");
+    const canvas = document.getElementById("outputCanvas");
+    const ctx = canvas.getContext("2d");
+    const blurRange = document.getElementById("blurRange");
+    const fValue = document.getElementById("fValue");
+    const loading = document.getElementById("loading");
 
-    let model;
-    let stream;
+    let net;
 
     async function startCamera() {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+      video.autoplay = true;
+      video.playsInline = true;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 }
       });
       video.srcObject = stream;
-      return new Promise(res => video.onloadedmetadata = res);
-    }
-
-    async function loadModel() {
-      // Model segmentasi manusia (lebih tajam dari bodypix)
-      model = await segmentation.SelfieSegmentation.load({
-        modelType: 'landscape'
+      return new Promise(resolve => {
+        video.onloadedmetadata = () => resolve();
       });
     }
 
-    async function renderFrame() {
-      const f = parseFloat(blurRange.value);
-      const blurAmount = Math.max(1, 30 / f);
-
-      const segmentationData = await model.segmentPeople(video);
-      const mask = segmentationData[0].mask;
-
-      // Render video ke canvas
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // Ambil latar & buat blur
-      ctx.save();
-      ctx.filter = `blur(${blurAmount}px)`;
-      ctx.globalCompositeOperation = 'destination-over';
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-
-      // Gambar wajah / tubuh tetap tajam
-      ctx.globalCompositeOperation = 'destination-in';
-      ctx.drawImage(mask, 0, 0, canvas.width, canvas.height);
-      ctx.globalCompositeOperation = 'destination-over';
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      requestAnimationFrame(renderFrame);
-    }
-
-    blurRange.addEventListener('input', () => {
-      fValue.textContent = `f/${blurRange.value}`;
-    });
-
-    (async () => {
+    async function run() {
       await startCamera();
-      await loadModel();
+      net = await bodyPix.load({
+        architecture: "MobileNetV1",
+        outputStride: 16,
+        multiplier: 0.75,
+        quantBytes: 2
+      });
+
+      loading.style.display = "none";
 
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      loading.style.display = 'none';
-      renderFrame();
-    })();
+      drawLoop();
+    }
+
+    async function drawLoop() {
+      const segmentation = await net.segmentPerson(video, {
+        internalResolution: "medium",
+        segmentationThreshold: 0.7
+      });
+
+      // Konversi nilai f-stop ke blur (semakin besar F, semakin kecil blur)
+      const f = parseFloat(blurRange.value);
+      const blurAmount = Math.max(1, 20 / f);
+
+      bodyPix.drawBokehEffect(
+        canvas,
+        video,
+        segmentation,
+        blurAmount,
+        6,
+        false
+      );
+
+      requestAnimationFrame(drawLoop);
+    }
+
+    // Update tampilan slider
+    blurRange.addEventListener("input", () => {
+      fValue.textContent = `f/${blurRange.value}`;
+    });
+
+    run();
   </script>
 </body>
 </html>
