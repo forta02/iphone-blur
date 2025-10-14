@@ -1,387 +1,153 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>iPhone-Style Cinematic WebCam (Auto Blur + f-control)</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kamera Auto Blur dengan Kontrol F</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      color: #fff;
+      font-family: "Poppins", sans-serif;
+    }
 
-<!-- Styles -->
-<style>
-  :root{
-    --bg:#06060a; --muted:#dfe6ee; --accent:#ff4757;
-  }
-  *{box-sizing:border-box}
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--muted);font-family:Inter,system-ui,Segoe UI,Roboto,Arial}
-  .wrap{max-width:920px;margin:10px auto;padding:12px}
-  header{display:flex;justify-content:space-between;align-items:center;gap:12px}
-  header h1{font-size:16px;margin:0}
-  #stage{position:relative;width:100%;padding-top:56%;background:#000;border-radius:14px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,0.6);margin-top:12px}
-  video#inputVideo, canvas#outCanvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
-  /* video is hidden visually (we draw it into canvas). keep it for capture */
-  video#inputVideo{display:none}
-  /* Focus ring */
-  .focus-ring{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:62%;height:62%;border-radius:24px;pointer-events:none;box-shadow:inset 0 0 80px rgba(0,0,0,0.25);border:1px solid rgba(255,255,255,0.03)}
-  /* Controls */
-  .controls{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px}
-  button, .btn {background:rgba(255,255,255,0.04);border:none;color:var(--muted);padding:10px 14px;border-radius:10px;font-weight:600;cursor:pointer}
-  .recordBtn{width:84px;height:84px;border-radius:50%;background:linear-gradient(180deg,var(--accent),#c0392b);border:4px solid rgba(255,255,255,0.05);box-shadow:0 10px 40px rgba(255,71,87,0.2);font-size:22px;color:white}
-  .small{padding:8px 10px;border-radius:8px}
-  .link{color:var(--muted);text-decoration:none;background:#fff;padding:8px 12px;border-radius:12px;color:#000}
-  .controls .tool {display:flex;gap:8px;align-items:center}
-  label{font-size:13px;color:rgba(255,255,255,0.85)}
-  input[type="range"]{width:220px}
-  #previewWrap{margin-top:14px;padding:12px;background:rgba(255,255,255,0.02);border-radius:10px;display:none}
-  #preview{width:100%;max-height:360px;background:#000}
-  footer{margin-top:10px;font-size:12px;color:rgba(255,255,255,0.45);text-align:center}
-  @media (max-width:520px){ .controls{flex-direction:column} input[type="range"]{width:86%} .focus-ring{width:76%;height:76%} }
-</style>
+    #outputCanvas {
+      width: 90vw;
+      height: auto;
+      border-radius: 14px;
+      box-shadow: 0 0 25px rgba(0, 0, 0, 0.8);
+    }
+
+    .controls {
+      margin-top: 15px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      width: 200px;
+      accent-color: #00bfff;
+      cursor: pointer;
+    }
+
+    #fValue {
+      font-weight: bold;
+      font-size: 1.1rem;
+      min-width: 50px;
+      text-align: center;
+    }
+
+    #info {
+      margin-top: 8px;
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #00bfff;
+      font-size: 1.1rem;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      50% { opacity: 0.3; }
+    }
+  </style>
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>iPhone-Style Cinematic WebCam</h1>
-      <div style="font-size:13px;color:rgba(255,255,255,0.7)">Auto blur (segmentation) • Rekam & Simpan</div>
-    </header>
+  <div id="loading">⏳ Memuat model AI...</div>
+  <canvas id="outputCanvas"></canvas>
 
-    <section id="stage">
-      <!-- hidden source video (we draw to canvas) -->
-      <video id="inputVideo" autoplay playsinline muted></video>
-      <!-- canvas that shows final effect -->
-      <canvas id="outCanvas"></canvas>
-
-      <!-- focus ring for visual guidance -->
-      <div class="focus-ring" aria-hidden="true"></div>
-    </section>
-
-    <div class="controls">
-      <div class="tool">
-        <button id="flipBtn" class="small">🔄 Ganti Kamera</button>
-      </div>
-
-      <div class="tool" style="align-items:center">
-        <label for="fSlider">Aperture (f)</label>
-        <input id="fSlider" type="range" min="1.4" max="16" step="0.1" value="2.8">
-        <span id="fValue" style="min-width:48px;text-align:center">f/2.8</span>
-      </div>
-
-      <div class="tool">
-        <button id="recordBtn" class="recordBtn">●</button>
-        <button id="stopBtn" class="small" disabled>■ Stop</button>
-      </div>
-
-      <div class="tool">
-        <a id="downloadLink" class="link" style="display:none" download="cinematic-blur.webm">⬇️ Simpan</a>
-      </div>
-
-      <div class="tool">
-        <label style="font-size:12px">Show mask</label>
-        <input type="checkbox" id="showMask" title="Tampilkan mask (debug)">
-      </div>
-    </div>
-
-    <div id="previewWrap">
-      <h3>Preview</h3>
-      <video id="preview" controls></video>
-      <div style="display:flex;gap:10px;margin-top:8px">
-        <button id="saveBtn" class="small">Simpan ke Perangkat</button>
-        <button id="closePreview" class="small">Tutup Preview</button>
-      </div>
-    </div>
-
-    <footer>
-      Untuk hasil terbaik: pastikan subjek berada di dalam ring fokus, dan latar belakang cukup jauh. Jika ingin pakai di HP, buka lewat Chrome dan izinkan kamera & mikrofon.
-    </footer>
+  <div class="controls">
+    <label for="blurRange">Aperture (F):</label>
+    <input type="range" id="blurRange" min="1.8" max="8" step="0.1" value="2.8">
+    <span id="fValue">f/2.8</span>
   </div>
 
-<!-- MediaPipe Selfie Segmentation (cdn) -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+  <div id="info">🎥 Fokus otomatis pada objek utama (blur latar menyesuaikan)</div>
 
-<!-- Main script -->
-<script>
-/*
-  iPhone-Style Cinematic WebCam (single file)
-  - uses MediaPipe SelfieSegmentation for mask (person)
-  - composite: draw blurred background, punch out foreground using mask, then draw sharp foreground
-  - f slider adjusts blur strength (lower f => stronger blur)
-  - record canvas stream + mix audio from camera
-*/
+  <!-- TensorFlow.js dan BodyPix -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0"></script>
 
-const videoEl = document.getElementById('inputVideo');
-const canvas = document.getElementById('outCanvas');
-const ctx = canvas.getContext('2d', { alpha: false });
+  <script>
+    const video = document.createElement("video");
+    const canvas = document.getElementById("outputCanvas");
+    const ctx = canvas.getContext("2d");
+    const blurRange = document.getElementById("blurRange");
+    const fValue = document.getElementById("fValue");
+    const loading = document.getElementById("loading");
 
-const flipBtn = document.getElementById('flipBtn');
-const recordBtn = document.getElementById('recordBtn');
-const stopBtn = document.getElementById('stopBtn');
-const downloadLink = document.getElementById('downloadLink');
-const previewWrap = document.getElementById('previewWrap');
-const preview = document.getElementById('preview');
-const saveBtn = document.getElementById('saveBtn');
-const closePreview = document.getElementById('closePreview');
+    let net;
 
-const fSlider = document.getElementById('fSlider');
-const fValue = document.getElementById('fValue');
-const showMask = document.getElementById('showMask');
-
-let usingFront = false;
-let stream = null;
-let audioTrack = null;
-let recorder = null;
-let recordedChunks = [];
-let canvasStream = null;
-let selfieSeg = null;
-let segMaskCanvas = null; // receives mask from MediaPipe
-let lastMaskImg = null;
-
-function mapFtoBlurPx(f){
-  // map f in [1.4..16] to blur px roughly [30..0]
-  const maxBlur = 32;
-  const minBlur = 0;
-  const t = (f - 1.4) / (16 - 1.4); // 0..1
-  const blur = Math.round((1 - t) * maxBlur + t * minBlur);
-  return blur;
-}
-
-fSlider.addEventListener('input', () => {
-  fValue.innerText = 'f/' + parseFloat(fSlider.value).toFixed(1);
-});
-
-async function startCamera(){
-  stopCamera();
-  const constraints = {
-    audio: true,
-    video: { facingMode: usingFront ? 'user' : 'environment', width:{ideal:1280}, height:{ideal:720} }
-  };
-  try{
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    videoEl.srcObject = stream;
-    // store audio track for recorder
-    const aud = stream.getAudioTracks();
-    audioTrack = aud.length ? aud[0] : null;
-    await videoEl.play();
-    resizeCanvas();
-    startSegmentation(); // (will safely reuse if already loaded)
-    requestAnimationFrame(renderLoop);
-  }catch(err){
-    alert('Gagal mengakses kamera: ' + err.message);
-    console.error(err);
-  }
-}
-
-function stopCamera(){
-  if(stream){
-    stream.getTracks().forEach(t => t.stop());
-    stream = null;
-  }
-  if(recorder && recorder.state === 'recording') recorder.stop();
-}
-
-function resizeCanvas(){
-  canvas.width = videoEl.videoWidth || 1280;
-  canvas.height = videoEl.videoHeight || 720;
-  // prepare mask canvas
-  if(!segMaskCanvas){
-    segMaskCanvas = document.createElement('canvas');
-  }
-  segMaskCanvas.width = canvas.width;
-  segMaskCanvas.height = canvas.height;
-}
-
-async function startSegmentation(){
-  // If already created, return (we call send repeatedly)
-  if(selfieSeg) return;
-  selfieSeg = new SelfieSegmentation.SelfieSegmentation({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
-  });
-  selfieSeg.setOptions({modelSelection: 1}); // 0 = general, 1 = landscape/higher accuracy for multiple people
-  selfieSeg.onResults(onSegResults);
-  console.log('MediaPipe SelfieSegmentation loaded');
-}
-
-function onSegResults(results){
-  // results.segmentationMask is an HTMLCanvasElement
-  if(!results.segmentationMask) return;
-  // copy mask to internal canvas sized to our output
-  // draw mask scaled to output canvas (segmentationMask matches input size)
-  segMaskCanvas.width = canvas.width;
-  segMaskCanvas.height = canvas.height;
-  const mctx = segMaskCanvas.getContext('2d');
-  mctx.clearRect(0,0,segMaskCanvas.width,segMaskCanvas.height);
-  mctx.drawImage(results.segmentationMask, 0, 0, segMaskCanvas.width, segMaskCanvas.height);
-  // keep last mask image for render
-  lastMaskImg = new Image();
-  lastMaskImg.src = segMaskCanvas.toDataURL();
-}
-
-async function renderLoop(){
-  if(!videoEl || videoEl.readyState < 2){ requestAnimationFrame(renderLoop); return; }
-  // update mask by sending current video frame
-  try{
-    await selfieSeg.send({image: videoEl});
-  }catch(e){
-    // ignore occasional errors if seg not ready
-  }
-
-  // ensure canvas resized
-  if(canvas.width !== videoEl.videoWidth || canvas.height !== videoEl.videoHeight){
-    resizeCanvas();
-  }
-
-  // draw blurred background first
-  const blurPx = mapFtoBlurPx(parseFloat(fSlider.value));
-  ctx.save();
-  ctx.filter = `blur(${blurPx}px) brightness(1.03) contrast(1.02) saturate(1.06)`;
-  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-  ctx.restore();
-
-  // If we have a mask image, punch out foreground from blurred layer
-  if(lastMaskImg && !showMask.checked){
-    try{
-      // destination-out: where mask is opaque (person) will be erased from the blurred layer
-      ctx.save();
-      ctx.globalCompositeOperation = 'destination-out';
-      // draw mask: mask white -> keep (we want to remove foreground from blurred background)
-      ctx.drawImage(lastMaskImg, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-    }catch(e){ /* continue if error */ }
-    // then draw sharp foreground on top
-    ctx.save();
-    ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
-  } else {
-    // if no mask or showMask is on: either show mask or fallback to simple centered focus area
-    if(showMask.checked && lastMaskImg){
-      // show mask overlay to debug
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.drawImage(lastMaskImg, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
-    } else {
-      // fallback: simulated center sharp area (already in v1)
-      const w = canvas.width * 0.6;
-      const h = canvas.height * 0.6;
-      const x = (canvas.width - w)/2;
-      const y = (canvas.height - h)/2;
-      // clear center region of blur by drawing sharp video clipped
-      ctx.save();
-      roundRect(ctx, x, y, w, h, Math.min(40, w*0.06));
-      ctx.clip();
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-      ctx.restore();
+    async function startCamera() {
+      video.autoplay = true;
+      video.playsInline = true;
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 }
+      });
+      video.srcObject = stream;
+      return new Promise(resolve => {
+        video.onloadedmetadata = () => resolve();
+      });
     }
-  }
 
-  // soft vignette and warm grade
-  const g = ctx.createRadialGradient(canvas.width/2, canvas.height/2, Math.min(canvas.width,canvas.height)/6, canvas.width/2, canvas.height/2, Math.max(canvas.width,canvas.height)/1.1);
-  g.addColorStop(0, 'rgba(0,0,0,0)');
-  g.addColorStop(1, 'rgba(0,0,0,0.25)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+    async function run() {
+      await startCamera();
+      net = await bodyPix.load({
+        architecture: "MobileNetV1",
+        outputStride: 16,
+        multiplier: 0.75,
+        quantBytes: 2
+      });
 
-  ctx.fillStyle = 'rgba(255,180,120,0.03)';
-  ctx.fillRect(0,0,canvas.width,canvas.height);
+      loading.style.display = "none";
 
-  requestAnimationFrame(renderLoop);
-}
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
 
-function roundRect(ctx,x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-// Recording
-recordBtn.addEventListener('click', startRecord);
-stopBtn.addEventListener('click', stopRecord);
-
-function startRecord(){
-  if(!canvas) return;
-  recordedChunks = [];
-  canvasStream = canvas.captureStream(30); // 30 fps ideal
-  // build combined stream: video from canvas + audio from camera (if any)
-  const combined = new MediaStream();
-  canvasStream.getVideoTracks().forEach(t => combined.addTrack(t));
-  if(stream && stream.getAudioTracks().length) {
-    stream.getAudioTracks().forEach(t => combined.addTrack(t));
-  }
-
-  let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-  if(!MediaRecorder.isTypeSupported(options.mimeType)) {
-    options = { mimeType: 'video/webm;codecs=vp8,opus' };
-    if(!MediaRecorder.isTypeSupported(options.mimeType)) {
-      options = { mimeType: 'video/webm' };
+      drawLoop();
     }
-  }
 
-  try{
-    recorder = new MediaRecorder(combined, options);
-  }catch(e){
-    recorder = new MediaRecorder(combined);
-  }
+    async function drawLoop() {
+      const segmentation = await net.segmentPerson(video, {
+        internalResolution: "medium",
+        segmentationThreshold: 0.7
+      });
 
-  recorder.ondataavailable = (e) => { if(e.data && e.data.size) recordedChunks.push(e.data); };
-  recorder.onstop = onRecStop;
-  recorder.start(100); // emit data each 100ms
+      // Konversi nilai f-stop ke blur (semakin besar F, semakin kecil blur)
+      const f = parseFloat(blurRange.value);
+      const blurAmount = Math.max(1, 20 / f);
 
-  recordBtn.disabled = true;
-  stopBtn.disabled = false;
-  recordBtn.style.opacity = '0.85';
-}
+      bodyPix.drawBokehEffect(
+        canvas,
+        video,
+        segmentation,
+        blurAmount,
+        6,
+        false
+      );
 
-function stopRecord(){
-  if(recorder && recorder.state === 'recording') recorder.stop();
-  recordBtn.disabled = false;
-  stopBtn.disabled = true;
-  recordBtn.style.opacity = '1';
-}
+      requestAnimationFrame(drawLoop);
+    }
 
-function onRecStop(){
-  const blob = new Blob(recordedChunks, { type: 'video/webm' });
-  const url = URL.createObjectURL(blob);
-  // show preview
-  preview.src = url;
-  previewWrap.style.display = 'block';
-  downloadLink.href = url;
-  downloadLink.style.display = 'inline-block';
-  // enable save button
-  saveBtn.disabled = false;
-}
+    // Update tampilan slider
+    blurRange.addEventListener("input", () => {
+      fValue.textContent = `f/${blurRange.value}`;
+    });
 
-// flip camera
-flipBtn.addEventListener('click', async () => {
-  usingFront = !usingFront;
-  await startCamera();
-});
-
-// preview controls
-saveBtn.addEventListener('click', () => {
-  if(!preview.src) return;
-  const a = document.createElement('a');
-  a.href = preview.src;
-  a.download = 'cinematic-blur.webm';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-});
-closePreview.addEventListener('click', () => {
-  previewWrap.style.display = 'none';
-  preview.pause();
-  preview.src = '';
-});
-
-// init
-(async () => {
-  // load segmentation lib (already loaded by <script src=...>), wait a bit
-  // start camera immediately
-  await startCamera();
-})();
-
-// helpful: stop camera on page unload
-window.addEventListener('pagehide', () => { stopCamera(); });
-</script>
+    run();
+  </script>
 </body>
 </html>
