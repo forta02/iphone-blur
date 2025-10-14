@@ -1,77 +1,51 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Kamera Mode Potret iPhone</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kamera Mode Potret</title>
   <style>
     body {
       margin: 0;
       background: #000;
+      color: white;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
-      font-family: "Poppins", sans-serif;
+      font-family: 'Poppins', sans-serif;
       overflow: hidden;
-      color: white;
     }
-
     video, canvas {
       position: absolute;
       width: 100%;
       height: auto;
       object-fit: cover;
-      border-radius: 20px;
+      border-radius: 16px;
     }
-
     .controls {
       position: fixed;
       bottom: 20px;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 10px 15px;
+      background: rgba(0,0,0,0.6);
+      padding: 10px 20px;
       border-radius: 12px;
       display: flex;
       align-items: center;
       gap: 10px;
-      flex-wrap: wrap;
     }
-
-    button {
-      background: #00bfff;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 8px;
-      color: white;
-      font-weight: bold;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    button:hover {
-      background: #0099cc;
-    }
-
-    input[type="range"] {
-      width: 150px;
+    input[type=range] {
+      width: 160px;
       accent-color: #00bfff;
     }
-
     #fValue {
-      min-width: 50px;
-      text-align: center;
       font-weight: bold;
+      font-size: 1rem;
+      min-width: 50px;
     }
-
     #loading {
+      font-size: 1.2rem;
       color: #00bfff;
-      font-size: 1.1rem;
-      animation: blink 1s infinite;
-    }
-
-    @keyframes blink {
-      50% { opacity: 0.4; }
     }
   </style>
 </head>
@@ -81,115 +55,69 @@
   <canvas id="canvas"></canvas>
 
   <div class="controls">
-    <label>Aperture:</label>
+    <label>Aperture (F):</label>
     <input type="range" id="blurRange" min="1.4" max="8" step="0.1" value="2.0">
     <span id="fValue">f/2.0</span>
-    <button id="switchCam">🔄 Ganti Kamera</button>
-    <button id="recordBtn">⏺️ Rekam</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/segmentation@0.1.3"></script>
 
   <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const blurRange = document.getElementById("blurRange");
-    const fValue = document.getElementById("fValue");
-    const switchCamBtn = document.getElementById("switchCam");
-    const recordBtn = document.getElementById("recordBtn");
-    const loading = document.getElementById("loading");
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const blurRange = document.getElementById('blurRange');
+    const fValue = document.getElementById('fValue');
+    const loading = document.getElementById('loading');
 
-    let model, stream, facingMode = "environment";
-    let mediaRecorder, chunks = [];
-    let recording = false;
+    let model;
+    let stream;
 
     async function startCamera() {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode }
+        video: { facingMode: 'environment' }
       });
       video.srcObject = stream;
-      await new Promise(res => video.onloadedmetadata = res);
+      return new Promise(res => video.onloadedmetadata = res);
     }
 
     async function loadModel() {
-      model = await segmentation.SelfieSegmentation.load({ modelType: "landscape" });
+      // Model segmentasi manusia (lebih tajam dari bodypix)
+      model = await segmentation.SelfieSegmentation.load({
+        modelType: 'landscape'
+      });
     }
 
-    async function drawFrame() {
+    async function renderFrame() {
       const f = parseFloat(blurRange.value);
       const blurAmount = Math.max(1, 30 / f);
 
-      const segmentationResult = await model.segmentPeople(video);
-      const mask = segmentationResult[0].mask;
+      const segmentationData = await model.segmentPeople(video);
+      const mask = segmentationData[0].mask;
 
+      // Render video ke canvas
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Ambil latar & buat blur
       ctx.save();
       ctx.filter = `blur(${blurAmount}px)`;
-      ctx.globalCompositeOperation = "destination-over";
+      ctx.globalCompositeOperation = 'destination-over';
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       ctx.restore();
 
-      ctx.globalCompositeOperation = "destination-in";
+      // Gambar wajah / tubuh tetap tajam
+      ctx.globalCompositeOperation = 'destination-in';
       ctx.drawImage(mask, 0, 0, canvas.width, canvas.height);
-      ctx.globalCompositeOperation = "destination-over";
+      ctx.globalCompositeOperation = 'destination-over';
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      requestAnimationFrame(drawFrame);
+      requestAnimationFrame(renderFrame);
     }
 
-    blurRange.addEventListener("input", () => {
+    blurRange.addEventListener('input', () => {
       fValue.textContent = `f/${blurRange.value}`;
     });
-
-    switchCamBtn.addEventListener("click", async () => {
-      facingMode = (facingMode === "environment") ? "user" : "environment";
-      await startCamera();
-    });
-
-    recordBtn.addEventListener("click", () => {
-      if (!recording) {
-        startRecording();
-      } else {
-        stopRecording();
-      }
-    });
-
-    function startRecording() {
-      const stream = canvas.captureStream(30);
-      mediaRecorder = new MediaRecorder(stream, { mimeType: "video/webm" });
-      chunks = [];
-
-      mediaRecorder.ondataavailable = e => chunks.push(e.data);
-      mediaRecorder.onstop = saveRecording;
-      mediaRecorder.start();
-
-      recording = true;
-      recordBtn.textContent = "⏹️ Stop";
-      recordBtn.style.background = "#ff4c4c";
-    }
-
-    function stopRecording() {
-      recording = false;
-      mediaRecorder.stop();
-      recordBtn.textContent = "⏺️ Rekam";
-      recordBtn.style.background = "#00bfff";
-    }
-
-    function saveRecording() {
-      const blob = new Blob(chunks, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "video-potret.mp4";
-      a.click();
-      URL.revokeObjectURL(url);
-    }
 
     (async () => {
       await startCamera();
@@ -198,8 +126,8 @@
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
 
-      loading.style.display = "none";
-      drawFrame();
+      loading.style.display = 'none';
+      renderFrame();
     })();
   </script>
 </body>
