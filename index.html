@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>iPhone Blur Cam</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>iPhone Blur Cam</h1>
+    </header>
+
+    <main>
+      <div id="camera-wrap">
+        <video id="video" playsinline autoplay muted></video>
+        <canvas id="canvas"></canvas>
+        <div id="focus-ring" aria-hidden="true"></div>
+      </div>
+
+      <div id="controls">
+        <button id="flipBtn" class="control">🔄 Ganti Kamera</button>
+        <button id="recordBtn" class="record">●</button>
+        <button id="stopBtn" class="stop" disabled>■</button>
+        <a id="downloadLink" class="download" style="display:none">⬇️ Simpan</a>
+      </div>
+
+      <div id="previewWrap" class="hidden">
+        <h2>Preview</h2>
+        <video id="preview" controls></video>
+        <div class="preview-controls">
+          <button id="saveBtn">Simpan ke Perangkat</button>
+          <button id="closePreview">Tutup Preview</button>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <small>Untuk hasil terbaik: objek dekat ke kamera dan latar jauh. Buka lewat HTTPS (GitHub Pages).</small>
+    </footer>
+  </div>
+
+<script src="script.js"></script>
+</body>
+</html>
