@@ -1,187 +1,340 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kamera Mode Potret iPhone</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Mode Potret Web — Rekam & Simpan (AI Blur)</title>
+
+<!-- Styles: tampil seperti kamera iPhone sederhana -->
 <style>
-  html,body{
-    margin:0;
-    padding:0;
-    height:100%;
-    background:#000;
-    overflow:hidden;
-    font-family:"Poppins",sans-serif;
-    color:white;
-  }
-  video,canvas{
-    position:absolute;
-    width:100%;
-    height:100%;
-    object-fit:cover;
-  }
-  #ui{
-    position:fixed;
-    bottom:0;
-    left:0;
-    right:0;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-    padding-bottom:25px;
-    background:linear-gradient(to top,rgba(0,0,0,0.5),transparent);
-  }
-  .slider-area{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin-bottom:10px;
-  }
-  input[type=range]{
-    width:160px;
-    accent-color:#ffd700;
-  }
-  #fVal{font-weight:bold;min-width:50px;}
-  .buttons{
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    gap:50px;
-  }
-  .btn-round{
-    width:70px;height:70px;
-    border-radius:50%;
-    border:4px solid white;
-    background:rgba(255,255,255,0.1);
-    cursor:pointer;
-    transition:0.2s;
-  }
-  .btn-round.recording{
-    background:#ff3333;
-    border-color:#ff3333;
-  }
-  #switchCam{
-    position:absolute;
-    right:20px;
-    bottom:35px;
-    width:40px;height:40px;
-    border-radius:50%;
-    background:rgba(255,255,255,0.2);
-    border:none;
-    color:white;
-    font-size:20px;
-    cursor:pointer;
-  }
-  #loading{
-    position:absolute;
-    top:50%;left:50%;
-    transform:translate(-50%,-50%);
-    color:#ffd700;
-    font-size:1.2rem;
-    animation:blink 1s infinite;
-  }
-  @keyframes blink{50%{opacity:0.4;}}
+  :root{--bg:#000;--accent:#ff4757;--muted:#ddd}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--muted);font-family:Inter,system-ui,Roboto,Arial}
+  .frame{position:relative;width:100%;height:100vh;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  canvas#out{width:100%;height:100%;object-fit:cover;display:block}
+  /* UI overlay */
+  .ui{position:fixed;left:0;right:0;bottom:18px;display:flex;justify-content:center;align-items:center;gap:18px;pointer-events:auto}
+  .btn{background:rgba(255,255,255,0.06);border:none;color:var(--muted);padding:10px 12px;border-radius:10px;cursor:pointer;font-weight:600}
+  .rec{width:82px;height:82px;border-radius:50%;background:linear-gradient(180deg,var(--accent),#c0333a);border:4px solid rgba(255,255,255,0.06);box-shadow:0 10px 30px rgba(255,71,87,0.22);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff}
+  .small{padding:8px 10px;border-radius:8px}
+  .rightcontrols{position:fixed;right:12px;top:12px;display:flex;flex-direction:column;gap:8px}
+  .centerTop{position:fixed;top:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.35);padding:8px 12px;border-radius:12px}
+  #previewWrap{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#000;padding:12px;border-radius:12px;display:none;z-index:40}
+  #preview{max-width:90vw;max-height:70vh;background:#000}
+  input[type=range]{width:160px}
+  .note{position:fixed;left:12px;bottom:18px;color:rgba(255,255,255,0.6);font-size:13px}
+  @media(max-width:520px){ input[type=range]{width:120px} .rec{width:68px;height:68px} }
 </style>
 </head>
 <body>
-  <div id="loading">📸 Memuat mode potret...</div>
-  <video id="video" autoplay playsinline></video>
-  <canvas id="canvas"></canvas>
+  <div class="frame">
+    <!-- hidden video source (we draw into canvas) -->
+    <video id="srcVideo" autoplay playsinline muted style="display:none"></video>
+    <!-- final output shown here -->
+    <canvas id="out"></canvas>
 
-  <div id="ui">
-    <div class="slider-area">
-      <span>Aperture:</span>
-      <input type="range" id="blurRange" min="1.4" max="8" step="0.1" value="2.0">
-      <span id="fVal">f/2.0</span>
+    <div class="centerTop">Mode Potret • AI Blur • Rekam & Simpan</div>
+
+    <div class="rightcontrols">
+      <button id="switchCam" class="btn small" title="Ganti kamera">🔄</button>
+      <button id="showMaskBtn" class="btn small" title="Tampilkan/ Sembunyikan mask">🟩 Mask</button>
     </div>
-    <div class="buttons">
-      <div id="recordBtn" class="btn-round"></div>
+
+    <div class="ui" role="toolbar" aria-label="Kontrol kamera">
+      <div style="display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.03);padding:8px;border-radius:12px">
+        <label style="font-weight:600">f</label>
+        <input id="fSlider" type="range" min="1.4" max="16" step="0.1" value="2.8">
+        <span id="fLabel" style="min-width:56px;text-align:center;font-weight:700">f/2.8</span>
+      </div>
+
+      <button id="recBtn" class="rec" title="Rekam/Stop">●</button>
+
+      <a id="downloadLink" class="btn small" style="display:none" download="cinematic-blur.webm">⬇️ Simpan</a>
     </div>
-    <button id="switchCam">🔄</button>
+
+    <div id="previewWrap">
+      <video id="preview" controls></video><br/>
+      <div style="text-align:center;margin-top:8px">
+        <button id="savePreview" class="btn small">Simpan ke Perangkat</button>
+        <button id="closePreview" class="btn small">Tutup</button>
+      </div>
+    </div>
+
+    <div class="note">Tips: letakkan subjek dalam frame, latar belakang jauh untuk efek terbaik.</div>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/segmentation@0.1.3"></script>
+  <!-- BodyPix (lightweight) from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0/dist/body-pix.min.js"></script>
+
 <script>
-const video=document.getElementById("video");
-const canvas=document.getElementById("canvas");
-const ctx=canvas.getContext("2d");
-const blurRange=document.getElementById("blurRange");
-const fVal=document.getElementById("fVal");
-const recordBtn=document.getElementById("recordBtn");
-const switchCam=document.getElementById("switchCam");
-const loading=document.getElementById("loading");
+/*
+  Web Potrait Recorder with BodyPix segmentation
+  - blur background following person/object mask
+  - f-slider maps to blur strength
+  - front/back switch
+  - record canvas stream + include microphone audio; download webm
+*/
 
-let model,stream,facing="environment";
-let recorder,chunks=[],recording=false;
+const srcVideo = document.getElementById('srcVideo');
+const outCanvas = document.getElementById('out');
+const ctx = outCanvas.getContext('2d', {alpha:false});
 
-async function startCam(){
-  if(stream) stream.getTracks().forEach(t=>t.stop());
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing}});
-  video.srcObject=stream;
-  await new Promise(r=>video.onloadedmetadata=r);
+const fSlider = document.getElementById('fSlider');
+const fLabel = document.getElementById('fLabel');
+const recBtn = document.getElementById('recBtn');
+const downloadLink = document.getElementById('downloadLink');
+const switchCam = document.getElementById('switchCam');
+const previewWrap = document.getElementById('previewWrap');
+const preview = document.getElementById('preview');
+const savePreview = document.getElementById('savePreview');
+const closePreview = document.getElementById('closePreview');
+const showMaskBtn = document.getElementById('showMaskBtn');
+
+let net = null;
+let stream = null;
+let usingFront = false;
+let segData = null;
+let maskCanvas = null;
+let recorder = null;
+let recorded = [];
+let audioTrack = null;
+let showMask = false;
+
+function fToBlurPx(f){
+  // map f [1.4..16] -> blur px [32..0]
+  const max = 32, min = 0;
+  const t = (f - 1.4) / (16 - 1.4);
+  return Math.round((1 - t) * max + t * min);
 }
+
+fSlider.addEventListener('input', ()=> {
+  fLabel.textContent = 'f/' + parseFloat(fSlider.value).toFixed(1);
+});
+
+showMaskBtn.addEventListener('click', ()=> {
+  showMask = !showMask;
+  showMaskBtn.style.background = showMask ? 'rgba(255,255,255,0.08)' : '';
+});
+
+async function startCamera(){
+  if(stream){
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  const constraints = { audio: true, video: { facingMode: usingFront ? 'user' : 'environment', width:{ideal:1280}, height:{ideal:720} } };
+  stream = await navigator.mediaDevices.getUserMedia(constraints);
+  srcVideo.srcObject = stream;
+  // keep audio track for recorder
+  const at = stream.getAudioTracks();
+  audioTrack = at.length ? at[0] : null;
+  await srcVideo.play();
+
+  // size canvas
+  outCanvas.width = srcVideo.videoWidth || 1280;
+  outCanvas.height = srcVideo.videoHeight ||  srcVideo.videoHeight || 720;
+
+  // mask canvas
+  if(!maskCanvas){
+    maskCanvas = document.createElement('canvas');
+  }
+  maskCanvas.width = outCanvas.width;
+  maskCanvas.height = outCanvas.height;
+}
+
 async function loadModel(){
-  model=await segmentation.SelfieSegmentation.load({modelType:"landscape"});
+  if(net) return;
+  net = await bodyPix.load({
+    architecture: 'MobileNetV1',
+    outputStride: 16,
+    multiplier: 0.75,
+    quantBytes: 2
+  });
+  console.log('BodyPix loaded');
 }
-async function draw(){
-  const f=parseFloat(blurRange.value);
-  const blurAmt=Math.max(1,30/f);
-  const seg=await model.segmentPeople(video);
-  const mask=seg[0].mask;
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+async function segStep(){
+  if(!net) return;
+  // segmentPerson for person; if you want general objects, BodyPix focuses on people
+  // use segmentPerson or segmentPersonParts for detail
+  const segmentation = await net.segmentPerson(srcVideo, {
+    internalResolution: 'medium',
+    segmentationThreshold: 0.65,
+    maxDetections: 1,
+    scoreThreshold: 0.3,
+    nmsRadius: 20
+  });
+  // draw mask into maskCanvas (white where person)
+  await bodyPix.toMask(segmentation, {r:255,g:255,b:255,a:255}, {r:0,g:0,b:0,a:0}, maskCanvas);
+  segData = segmentation;
+}
+
+async function renderLoop(){
+  if(srcVideo.readyState < 2){ requestAnimationFrame(renderLoop); return; }
+  // compute segmentation at lower frequency to save CPU (e.g., every 2 frames)
+  // but here we call segStep frequently; you can throttle if performance issue
+  try{ await segStep(); }catch(e){ /* ignore */ }
+
+  const blurPx = fToBlurPx(parseFloat(fSlider.value));
+  // draw blurred background
   ctx.save();
-  ctx.filter=`blur(${blurAmt}px)`;
-  ctx.globalCompositeOperation="destination-over";
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  ctx.filter = `blur(${blurPx}px) brightness(1.03) contrast(1.02) saturate(1.06)`;
+  ctx.drawImage(srcVideo, 0, 0, outCanvas.width, outCanvas.height);
   ctx.restore();
-  ctx.globalCompositeOperation="destination-in";
-  ctx.drawImage(mask,0,0,canvas.width,canvas.height);
-  ctx.globalCompositeOperation="destination-over";
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
-  requestAnimationFrame(draw);
-}
-blurRange.oninput=()=>{fVal.textContent=`f/${blurRange.value}`;};
 
-switchCam.onclick=async()=>{
-  facing=facing==="environment"?"user":"environment";
-  await startCam();
-};
+  if(segData && maskCanvas && !showMask){
+    // remove the person area from blurred layer (destination-out)
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.drawImage(maskCanvas, 0, 0, outCanvas.width, outCanvas.height);
+    ctx.restore();
 
-recordBtn.onclick=()=>{
-  if(!recording)startRec();else stopRec();
-};
-function startRec(){
-  const s=canvas.captureStream(30);
-  recorder=new MediaRecorder(s,{mimeType:"video/webm"});
-  chunks=[];
-  recorder.ondataavailable=e=>chunks.push(e.data);
-  recorder.onstop=save;
-  recorder.start();
-  recording=true;
-  recordBtn.classList.add("recording");
+    // draw sharp person on top
+    ctx.save();
+    ctx.drawImage(srcVideo, 0, 0, outCanvas.width, outCanvas.height);
+    ctx.restore();
+  } else if(segData && maskCanvas && showMask){
+    // show mask debug overlay
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(maskCanvas, 0, 0, outCanvas.width, outCanvas.height);
+    ctx.restore();
+  } else {
+    // fallback: center sharp rect
+    const w = outCanvas.width * 0.6;
+    const h = outCanvas.height * 0.6;
+    const x = (outCanvas.width - w)/2;
+    const y = (outCanvas.height - h)/2;
+    ctx.save();
+    roundRectPath(ctx,x,y,w,h, Math.min(40, w*0.06));
+    ctx.clip();
+    ctx.drawImage(srcVideo, 0, 0, outCanvas.width, outCanvas.height);
+    ctx.restore();
+  }
+
+  // gentle vignette
+  const grad = ctx.createRadialGradient(outCanvas.width/2, outCanvas.height/2, Math.min(outCanvas.width,outCanvas.height)/6, outCanvas.width/2, outCanvas.height/2, Math.max(outCanvas.width,outCanvas.height)/1.1);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.25)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,outCanvas.width,outCanvas.height);
+
+  // warm tone overlay
+  ctx.fillStyle = 'rgba(255,180,120,0.03)';
+  ctx.fillRect(0,0,outCanvas.width,outCanvas.height);
+
+  requestAnimationFrame(renderLoop);
 }
-function stopRec(){
-  recording=false;
-  recorder.stop();
-  recordBtn.classList.remove("recording");
+
+function roundRectPath(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
 }
-function save(){
-  const blob=new Blob(chunks,{type:"video/webm"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;a.download="mode-potret.mp4";a.click();
-  URL.revokeObjectURL(url);
+
+/* Recording */
+recBtn.addEventListener('click', ()=> {
+  if(recorder && recorder.state === 'recording'){
+    recorder.stop();
+    recBtn.style.boxShadow = '';
+  } else {
+    startRecording();
+    recBtn.style.boxShadow = '0 8px 30px rgba(0,0,0,0.6) inset';
+  }
+});
+
+async function startRecording(){
+  recorded = [];
+  const canvasStream = outCanvas.captureStream(30);
+  const combined = new MediaStream();
+  // add canvas video
+  canvasStream.getVideoTracks().forEach(t=>combined.addTrack(t));
+  // add audio from mic (from current stream) if available
+  if(stream && stream.getAudioTracks().length){
+    stream.getAudioTracks().forEach(t=>combined.addTrack(t));
+  } else {
+    // try microphone separately
+    try{
+      const mic = await navigator.mediaDevices.getUserMedia({audio:true});
+      mic.getAudioTracks().forEach(t=>combined.addTrack(t));
+    }catch(e){}
+  }
+
+  let options = {mimeType: 'video/webm;codecs=vp9,opus'};
+  if(!MediaRecorder.isTypeSupported(options.mimeType)){
+    options = {mimeType:'video/webm;codecs=vp8,opus'};
+    if(!MediaRecorder.isTypeSupported(options.mimeType)) options = {mimeType:'video/webm'};
+  }
+  recorder = new MediaRecorder(combined, options);
+
+  recorder.ondataavailable = e => { if(e.data && e.data.size) recorded.push(e.data); };
+  recorder.onstop = onRecordingStop;
+  recorder.start(200);
+
+  recBtn.textContent = '■';
 }
-(async()=>{
-  await startCam();
-  await loadModel();
-  canvas.width=video.videoWidth;
-  canvas.height=video.videoHeight;
-  loading.style.display="none";
-  draw();
+
+function onRecordingStop(){
+  const blob = new Blob(recorded, {type:'video/webm'});
+  const url = URL.createObjectURL(blob);
+  downloadLink.href = url;
+  downloadLink.style.display = 'inline-block';
+  preview.src = url;
+  previewWrap.style.display = 'block';
+  // reset rec button
+  recBtn.textContent = '●';
+}
+
+/* save preview */
+savePreview.addEventListener('click', ()=> {
+  if(!preview.src) return;
+  const a = document.createElement('a');
+  a.href = preview.src;
+  a.download = 'cinematic-blur.webm';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+});
+
+/* close preview */
+closePreview.addEventListener('click', ()=> {
+  previewWrap.style.display = 'none';
+  preview.pause();
+  preview.src = '';
+});
+
+/* switch camera */
+switchCam.addEventListener('click', async ()=>{
+  usingFront = !usingFront;
+  await startCamera();
+});
+
+/* init */
+(async ()=>{
+  try{
+    await loadModel();
+    await startCamera();
+    renderLoop();
+  }catch(e){
+    alert('Gagal inisialisasi: ' + e.message);
+    console.error(e);
+  }
 })();
+
+/* load model helper */
+async function loadModel(){
+  if(net) return;
+  net = await bodyPix.load({architecture:'MobileNetV1',outputStride:16,multiplier:0.75,quantBytes:2});
+  console.log('BodyPix ready');
+}
+
+window.addEventListener('pagehide', ()=> {
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  if(recorder && recorder.state==='recording') recorder.stop();
+});
 </script>
 </body>
 </html>
