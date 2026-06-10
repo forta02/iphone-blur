@@ -1,304 +1,370 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Portrait Blur — Simple Web</title>
-<style>
-  :root{--bg:#000;--accent:#ff4757;--muted:#e6eef8}
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--muted);font-family:system-ui,Segoe UI,Roboto,Arial}
-  .stage{position:relative;width:100%;height:100vh;overflow:hidden;display:flex;align-items:center;justify-content:center}
-  video#src{display:none}
-  canvas#out{width:100%;height:100%;object-fit:cover;display:block}
-  /* UI */
-  .ui{position:fixed;left:0;right:0;bottom:14px;display:flex;justify-content:center;gap:12px;align-items:center;pointer-events:auto;padding:0 12px}
-  .btn{background:rgba(255,255,255,0.06);border:none;color:var(--muted);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:600}
-  .rec{width:78px;height:78px;border-radius:50%;background:linear-gradient(180deg,var(--accent),#c0333a);border:4px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;color:white;font-size:22px}
-  input[type=range]{width:180px}
-  .topbar{position:fixed;top:12px;left:12px;color:rgba(255,255,255,0.85);background:rgba(0,0,0,0.35);padding:6px 10px;border-radius:10px;font-weight:600}
-  .rightcontrols{position:fixed;right:12px;top:12px;display:flex;flex-direction:column;gap:8px}
-  .small{padding:8px 10px;border-radius:8px}
-  #focusMarker{position:absolute;border:2px solid rgba(255,255,255,0.9);width:120px;height:120px;border-radius:16px;pointer-events:none;transform:translate(-50%,-50%);box-shadow:0 6px 18px rgba(0,0,0,0.6)}
-  #download{display:none}
-  @media(max-width:520px){ input[type=range]{width:120px} .rec{width:66px;height:66px} #focusMarker{width:92px;height:92px} }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Kendala Aksi Bangda - Kecamatan Seberuang</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            background: #ffffff;
+            margin: 0 auto;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h2, h3 {
+            text-align: center;
+            color: #0275d8;
+            margin-bottom: 5px;
+        }
+        p.subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+        .tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #ddd;
+        }
+        .tab-btn {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            font-weight: bold;
+            color: #555;
+            transition: 0.3s;
+        }
+        .tab-btn.active {
+            color: #0275d8;
+            border-bottom: 3px solid #0275d8;
+        }
+        .form-group {
+            margin-bottom: 18px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        select, input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        textarea {
+            resize: vertical;
+            height: 80px;
+        }
+        select:focus, input:focus, textarea:focus {
+            border-color: #0275d8;
+            outline: none;
+            box-shadow: 0 0 5px rgba(2, 117, 216, 0.2);
+        }
+        button.btn-submit {
+            width: 100%;
+            padding: 12px;
+            background-color: #0275d8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        button.btn-submit:hover {
+            background-color: #01549b;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            font-weight: bold;
+            color: #0275d8;
+            margin-top: 15px;
+        }
+        /* Style Tambahan untuk Tabel */
+        .table-container {
+            margin-top: 40px;
+            overflow-x: auto;
+            border-top: 2px solid #ddd;
+            padding-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #0275d8;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
 </head>
 <body>
-  <div class="stage">
-    <video id="src" autoplay playsinline muted></video>
-    <canvas id="out"></canvas>
-    <div id="focusMarker" aria-hidden="true"></div>
-    <div class="topbar">Portrait Blur (simulated)</div>
-    <div class="rightcontrols">
-      <button id="switchBtn" class="btn small" title="Ganti kamera">🔄</button>
-      <button id="gridBtn" class="btn small" title="Toggle Grid">🔲</button>
+
+<div class="container">
+    <h2>Identifikasi Kendala Aksi Bangda</h2>
+    <p class="subtitle">Kecamatan Seberuang - Semester I Tahun 2026</p>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchUnit('Puskesmas')">Unit Puskesmas</button>
+        <button class="tab-btn" onclick="switchUnit('PLKB')">Unit PLKB</button>
     </div>
-  </div>
 
-  <div class="ui" role="toolbar" aria-label="Controls">
-    <label style="display:flex;align-items:center;gap:8px">
-      Aperture
-      <input id="fSlider" type="range" min="1.4" max="16" step="0.1" value="2.8">
-      <span id="fLabel">f/2.8</span>
-    </label>
+    <form id="bangdaForm">
+        <input type="hidden" id="unit_kerja" name="unit_kerja" value="Puskesmas">
 
-    <button id="recBtn" class="rec" title="Rekam/Stop">●</button>
+        <div class="form-group">
+            <label for="indikator">Pilih Kode & Nama Indikator:</label>
+            <select id="indikator" name="indikator" required></select>
+        </div>
 
-    <a id="download" class="btn" download="portrait-blur.webm">⬇️ Simpan</a>
-  </div>
+        <div class="form-group" id="ruangLingkupGroup">
+            <label for="ruang_lingkup">Pilih Ruang Lingkup:</label>
+            <select id="ruang_lingkup" name="ruang_lingkup"></select>
+        </div>
+
+        <div class="form-group">
+            <label for="permasalahan">Opsi Permasalahan (Sesuai di Web):</label>
+            <input type="text" id="permasalahan" name="permasalahan" placeholder="Misal: Capaian tidak memenuhi target" required>
+        </div>
+
+        <div class="form-group">
+            <label for="penyebab">Penyebab Masalah (Kondisi Riil Lapangan):</label>
+            <textarea id="penyebab" name="penyebab" placeholder="Jelaskan kendala..." required></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="rekomendasi">Rekomendasi Solusi:</label>
+            <textarea id="rekomendasi" name="rekomendasi" placeholder="Solusi..." required></textarea>
+        </div>
+
+        <div class="form-group">
+            <label for="usulan">Usulan Kegiatan Nyata:</label>
+            <input type="text" id="usulan" name="usulan" placeholder="Contoh: Pengadaan PMT Tambahan" required>
+        </div>
+
+        <div class="form-group">
+            <label for="anggaran">Kebutuhan Anggaran (Rp):</label>
+            <input type="number" id="anggaran" name="anggaran" placeholder="Isi 0 jika tidak ada" required>
+        </div>
+
+        <div class="form-group">
+            <label for="lokasi">Rencana Lokasi Kegiatan (Nama Desa):</label>
+            <input type="text" id="lokasi" name="lokasi" placeholder="Nama desa..." required>
+        </div>
+
+        <button type="submit" class="btn-submit">Kirim Data Kendala</button>
+        <div class="loading" id="loadingText">Sedang memproses...</div>
+    </form>
+
+    <div class="table-container">
+        <h3>Riwayat Kendala yang Sudah Diinput</h3>
+        <p style="text-align: center; font-size: 12px; color: #777;">Menampilkan data real-time dari Google Sheets</p>
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Unit</th>
+                    <th>Indikator</th>
+                    <th>Ruang Lingkup</th>
+                    <th>Permasalahan</th>
+                    <th>Penyebab</th>
+                    <th>Rekomendasi</th>
+                    <th>Usulan</th>
+                    <th>Anggaran</th>
+                    <th>Lokasi</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr>
+                    <td colspan="9" style="text-align: center; color: #888;">Sedang memuat riwayat data...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
 <script>
-/* Simple simulated portrait blur web app
-   - Full background blur (no AI)
-   - Focus window (rounded rect) showing sharp video
-   - Tap/click to move focus
-   - f-slider controls blur intensity
-   - switch camera, record canvas (+ audio) and download .webm
-   - responsive + auto-rotate by listening to resize/orientation
-*/
+    const mapIndikator = {
+        Puskesmas: [
+            "CL_01 - Jml Ibu Hamil KEK Mendapatkan Tambahan Asupan Gizi",
+            "CL_02 - Jml Ibu Hamil Mengonsumsi TTD Minimal 180 Tablet",
+            "CL_03 - Jml Ibu Hamil Mengonsumsi Makanan Beragam",
+            "CL_04 - Jml Ibu Hamil Periksa Kehamilan (ANC) 6 Kali",
+            "CL_06 - Jml Bayi Baru Lahir Mendapat Inisiasi Menyusui Dini",
+            "CL_07 - Jml Bayi Usia 0-5 Bulan Mendapat ASI Eksklusif",
+            "CL_08 - Jml Anak Usia 6-23 Bulan yang Mendapat MP-ASI",
+            "CL_09 - Jml Anak Usia 6-23 Bulan yang Masih Mendapat ASI",
+            "CL_10 - Jml Baduta Gizi Buruk Mendapat Tata Laksana Gizi Buruk",
+            "CL_11 - Jml Baduta yang Dipantau Pertumbuhan dan Perkembangan",
+            "CL_12 - Jml Baduta Gizi Kurang Mendapat Tambahan Asupan Gizi",
+            "CL_13 - Jml Baduta yang Memperoleh Imunisasi Rutin Lengkap",
+            "CL_14 - Jml Pemberian Oralit dan Zinc pada Baduta Diare",
+            "CL_15 - Jml Pemberian POPM Cacingan pada Baduta",
+            "CL_16 - Jml Balita Gizi Buruk Mendapat Tata Laksana Gizi Buruk",
+            "CL_17 - Jml Balita yang Dipantau Pertumbuhan dan Perkembangan",
+            "CL_18 - Jml Balita Gizi Kurang Mendapat Tambahan Asupan Gizi",
+            "CL_19 - Jml Pemberian Oralit dan Zinc pada Balita Diare",
+            "CL_20 - Jml Penemuan Kasus Pneumonia Balita",
+            "CL_21 - Jml Pemberian POPM Cacingan pada Balita",
+            "CL_23 - Jml Remaja Putri yang Diskrining Anemia",
+            "CL_24 - Cakupan Catin yang Memperoleh Pemeriksaan Kesehatan"
+        ],
+        PLKB: [
+            "CL_05 - Jml Pelayanan KB Pascapersalinan Dalam 42 Hari",
+            "CL_22 - Jml Remaja Putri yang Mengonsumsi TTD",
+            "CL_25 - Jml Pasangan Catin Mendapat Bimbingan Perkawinan Stunting",
+            "CL_29 - Jml Kelompok Sasaran yang Memperoleh Pendampingan TPK"
+        ]
+    };
 
-const src = document.getElementById('src');
-const out = document.getElementById('out');
-const ctx = out.getContext('2d', { alpha: false });
+    const ruangLingkupPuskesmas = [
+        "CL_25_06 - PENINGKATAN AKSES BALITA PADA LAYANAN KESEHATAN YANG BERKUALITAS",
+        "CL_26_01 - PENGUATAN POSYANDU...",
+        "CL_26_02 - PENINGKATAN PELAYANAN IBU DAN BAYI...",
+        "CL_26_03 - PENGUATAN DAN PENGEMBANGAN MTBS",
+        "CL_26_05 - PENDAMPINGAN BADUTA...",
+        "CL_26_06 - PENYEDIAAN F75, F100, DAN RUTF",
+        "CL_26_07 - PENGUATAN PUSKESMAS DALAM PENANGANAN BALITA GIZI BURUK...",
+        "CL_26_08 - OPTIMALISASI TIM ASUHAN GIZI",
+        "CL_27_01 - PENGUATAN SISTEM SURVEILANS GIZI",
+        "CL_27_02 - PERBAIKAN PENCATATAN HASIL PEMANTAUAN...",
+        "CL_27_03 - PENINGKATAN KETAHANAN SOSIO-EKONOMI KELUARGA..."
+    ];
 
-const fSlider = document.getElementById('fSlider');
-const fLabel = document.getElementById('fLabel');
-const recBtn = document.getElementById('recBtn');
-const download = document.getElementById('download');
-const switchBtn = document.getElementById('switchBtn');
-const focusMarker = document.getElementById('focusMarker');
-const gridBtn = document.getElementById('gridBtn');
+    function switchUnit(unit) {
+        document.getElementById('unit_kerja').value = unit;
+        const buttons = document.querySelectorAll('.tab-btn');
+        buttons.forEach(btn => btn.classList.remove('active'));
+        
+        const rlGroup = document.getElementById('ruangLingkupGroup');
+        const rlSelect = document.getElementById('ruang_lingkup');
 
-let stream = null;
-let usingFront = false;
-let focus = { x: 0.5, y: 0.5 }; // normalized coords
-let focusRadius = 0.32; // fraction of min dimension
-let recorder = null;
-let recordedChunks = [];
-let gridOn = false;
+        if(unit === 'Puskesmas') {
+            buttons[0].classList.add('active');
+            rlGroup.style.display = 'block';
+            rlSelect.required = true;
+            fillDropdown('indikator', mapIndikator.Puskesmas);
+            fillDropdown('ruang_lingkup', ruangLingkupPuskesmas);
+        } else {
+            buttons[1].classList.add('active');
+            rlGroup.style.display = 'none';
+            rlSelect.required = false;
+            rlSelect.innerHTML = '<option value="-">-</option>';
+            fillDropdown('indikator', mapIndikator.PLKB);
+        }
+    }
 
-function mapFtoBlurPx(f){
-  // f in [1.4..16] => blur px [32..0] (lower f = stronger blur)
-  const max = 32, min = 0;
-  const t = (f - 1.4) / (16 - 1.4);
-  return (1 - t) * max + t * min;
-}
+    function fillDropdown(elementId, dataArray) {
+        const select = document.getElementById(elementId);
+        select.innerHTML = "";
+        dataArray.forEach(item => {
+            let option = document.createElement('option');
+            option.value = item;
+            option.textContent = item;
+            select.appendChild(option);
+        });
+    }
 
-fSlider.addEventListener('input', () => {
-  fLabel.textContent = 'f/' + parseFloat(fSlider.value).toFixed(1);
-});
+    switchUnit('Puskesmas');
 
-async function startCamera(){
-  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream = null; }
-  const constraints = {
-    video: { facingMode: usingFront ? 'user' : 'environment', width:{ideal:1280}, height:{ideal:720} },
-    audio: true
-  };
-  try{
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
-    src.srcObject = stream;
-    // keep audio track (recorder uses it)
-    await src.play();
-    resizeCanvas();
-    requestAnimationFrame(drawFrame);
-  }catch(e){
-    alert('Gagal mengakses kamera: ' + (e.message || e));
-    console.error(e);
-  }
-}
+    // TEMPELKAN URL SCRIPT WEB APP ANDA DI SINI
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwwGz618Xbuv0k9DKpVv67pgaxvtMI2K4JlZEMTsS_ksoptJ_7yTiBC7OCiJvNbnJii/exec";
 
-function resizeCanvas(){
-  // handle orientation/resizing: choose video natural size
-  const vw = src.videoWidth || 1280;
-  const vh = src.videoHeight || 720;
-  out.width = vw;
-  out.height = vh;
-  // update focus marker size & pos
-  updateFocusMarker();
-}
+    // Fungsi Mengambil Data (GET) dari Spreadsheet untuk ditampilkan di Tabel
+    function loadTableData() {
+        fetch(WEB_APP_URL + "?action=read")
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = "";
+            
+            if(data.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Belum ada data kendala yang dimasukkan.</td></tr>';
+                return;
+            }
 
-function updateFocusMarker(){
-  focusMarker.style.left = (focus.x * 100) + '%';
-  focusMarker.style.top = (focus.y * 100) + '%';
-  const minDim = Math.min(out.width, out.height);
-  const size = Math.max(64, Math.floor(minDim * focusRadius));
-  focusMarker.style.width = size + 'px';
-  focusMarker.style.height = size + 'px';
-  focusMarker.style.borderRadius = Math.max(8, Math.floor(size * 0.12)) + 'px';
-  focusMarker.style.display = 'block';
-}
+            data.forEach(row => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><b>${row.unit_kerja || ''}</b></td>
+                    <td>${row.indikator || ''}</td>
+                    <td>${row.ruang_lingkup || ''}</td>
+                    <td>${row.permasalahan || ''}</td>
+                    <td>${row.penyebab || ''}</td>
+                    <td>${row.rekomendasi || ''}</td>
+                    <td>${row.usulan || ''}</td>
+                    <td>${row.anggaran || 0}</td>
+                    <td>${row.lokasi || ''}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading data:', error);
+            document.getElementById('tableBody').innerHTML = '<tr><td colspan="9" style="text-align: center; color: red;">Gagal memuat riwayat data.</td></tr>';
+        });
+    }
 
-function drawRoundedClip(ctx, x, y, w, h, r){
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
+    // Jalankan pemuatan tabel pertama kali aplikasi dibuka
+    loadTableData();
 
-function drawGrid(){
-  if(!gridOn) return;
-  const cols = 3, rows = 3;
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
-  ctx.lineWidth = 1;
-  for(let i=1;i<cols;i++){
-    const x = (out.width/cols) * i;
-    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,out.height); ctx.stroke();
-  }
-  for(let j=1;j<rows;j++){
-    const y = (out.height/rows) * j;
-    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(out.width,y); ctx.stroke();
-  }
-  ctx.restore();
-}
+    // Proses kirim form (POST)
+    document.getElementById('bangdaForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        document.getElementById('loadingText').style.display = 'block';
+        
+        const formData = new FormData(this);
+        const dataObj = {};
+        formData.forEach((value, key) => dataObj[key] = value);
 
-function drawFrame(){
-  if(!src || src.readyState < 2){ requestAnimationFrame(drawFrame); return; }
-  // compute blur
-  const blurPx = mapFtoBlurPx(parseFloat(fSlider.value));
-
-  // draw blurred full frame
-  ctx.save();
-  ctx.filter = `blur(${blurPx}px) brightness(1.03) contrast(1.02) saturate(1.05)`;
-  ctx.drawImage(src, 0, 0, out.width, out.height);
-  ctx.restore();
-
-  // draw sharp area on top (rounded rect)
-  const minDim = Math.min(out.width, out.height);
-  const w = minDim * focusRadius;
-  const h = w * (out.height / out.width) * 1.05;
-  const cx = focus.x * out.width;
-  const cy = focus.y * out.height;
-  const x = cx - w/2;
-  const y = cy - h/2;
-  const r = Math.min(40, w * 0.08);
-
-  // clip and draw sharp video inside
-  ctx.save();
-  drawRoundedClip(ctx, x, y, w, h, r);
-  ctx.clip();
-  ctx.drawImage(src, 0, 0, out.width, out.height);
-  ctx.restore();
-
-  // subtle vignette and warm tone overlay for cinematic look
-  const grad = ctx.createRadialGradient(cx, cy, Math.min(w,h)/2, out.width/2, out.height/2, Math.max(out.width,out.height));
-  grad.addColorStop(0, 'rgba(0,0,0,0)');
-  grad.addColorStop(1, 'rgba(0,0,0,0.22)');
-  ctx.fillStyle = grad; ctx.fillRect(0,0,out.width,out.height);
-
-  ctx.fillStyle = 'rgba(255,180,120,0.03)';
-  ctx.fillRect(0,0,out.width,out.height);
-
-  // optional grid
-  drawGrid();
-
-  requestAnimationFrame(drawFrame);
-}
-
-/* click/tap to change focus */
-out.addEventListener('click', (e) => {
-  const rect = out.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width;
-  const y = (e.clientY - rect.top) / rect.height;
-  focus.x = Math.min(0.98, Math.max(0.02, x));
-  focus.y = Math.min(0.98, Math.max(0.02, y));
-  updateFocusMarker();
-});
-
-/* toggle grid */
-gridBtn.addEventListener('click', () => { gridOn = !gridOn; gridBtn.style.background = gridOn ? 'rgba(255,255,255,0.06)' : ''; });
-
-/* switch camera */
-switchBtn.addEventListener('click', async () => {
-  usingFront = !usingFront;
-  await startCamera();
-});
-
-/* Recording logic */
-recBtn.addEventListener('click', () => {
-  if(recorder && recorder.state === 'recording') {
-    recorder.stop();
-    recBtn.classList.remove('recording');
-    recBtn.textContent = '●';
-  } else {
-    startRecording();
-  }
-});
-
-async function startRecording(){
-  recordedChunks = [];
-  const canvasStream = out.captureStream(30); // canvas video (with effect)
-  const combined = new MediaStream();
-  canvasStream.getVideoTracks().forEach(t => combined.addTrack(t));
-  // add audio track if available in camera stream
-  if(stream && stream.getAudioTracks().length){
-    stream.getAudioTracks().forEach(t => combined.addTrack(t));
-  } else {
-    // fallback request mic separately
-    try{
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mic.getAudioTracks().forEach(t => combined.addTrack(t));
-    }catch(e){}
-  }
-
-  // choose mime
-  let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-  if(!MediaRecorder.isTypeSupported(options.mimeType)){
-    options = { mimeType: 'video/webm;codecs=vp8,opus' };
-    if(!MediaRecorder.isTypeSupported(options.mimeType)) options = { mimeType: 'video/webm' };
-  }
-
-  try{
-    recorder = new MediaRecorder(combined, options);
-  }catch(e){
-    recorder = new MediaRecorder(combined);
-  }
-
-  recorder.ondataavailable = e => { if(e.data && e.data.size) recordedChunks.push(e.data); };
-  recorder.onstop = onRecordingStop;
-  recorder.start(200);
-
-  recBtn.classList.add('recording');
-  recBtn.textContent = '■';
-}
-
-function onRecordingStop(){
-  const blob = new Blob(recordedChunks, { type: 'video/webm' });
-  const url = URL.createObjectURL(blob);
-  download.href = url;
-  download.style.display = 'inline-block';
-  // auto-trigger download suggestion (optional — commented)
-  // const a = document.createElement('a'); a.href = url; a.download='portrait-blur.webm'; a.click();
-}
-
-/* auto-rotate / responsiveness */
-window.addEventListener('resize', () => {
-  // small debounce
-  clearTimeout(window._rb);
-  window._rb = setTimeout(() => {
-    try{ resizeCanvas(); }catch(e){}
-  }, 120);
-});
-
-/* init */
-(async () => {
-  try{
-    await startCamera();
-    // wait for video metadata
-    src.addEventListener('loadedmetadata', () => { resizeCanvas(); updateFocusMarker(); });
-  }catch(e){
-    alert('Tidak bisa buka kamera: ' + (e.message || e));
-  }
-})();
-
-/* cleanup */
-window.addEventListener('pagehide', () => {
-  if(stream) stream.getTracks().forEach(t => t.stop());
-  if(recorder && recorder.state === 'recording') recorder.stop();
-});
+        fetch(WEB_APP_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataObj)
+        })
+        .then(() => {
+            document.getElementById('loadingText').style.display = 'none';
+            alert("Data kendala berhasil disimpan!");
+            document.getElementById('bangdaForm').reset();
+            switchUnit(document.getElementById('unit_kerja').value);
+            // Refresh tabel otomatis setelah berhasil menambahkan data baru
+            setTimeout(loadTableData, 1500);
+        })
+        .catch(error => {
+            document.getElementById('loadingText').style.display = 'none';
+            console.error('Error:', error);
+            alert("Gagal mengirim data.");
+        });
+    });
 </script>
+
 </body>
 </html>
